@@ -1,0 +1,18 @@
+# Force LF for shell scripts so they run on Linux/macOS/Git-Bash even when
+# the repo is cloned on Windows with autocrlf=true.
+*.sh        text eol=lf
+*.bash      text eol=lf
+
+# PowerShell scripts use CRLF (native Windows convention).
+*.ps1       text eol=crlf
+
+# Markdown / JSON / config: normalize to LF (cross-platform compatible).
+*.md        text eol=lf
+*.json      text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+
+# Binary files (none currently, but future-proof).
+*.png       binary
+*.jpg       binary
+*.gif       binary

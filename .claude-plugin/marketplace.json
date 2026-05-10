@@ -1,0 +1,24 @@
+{
+  "name": "handoff-revive-marketplace",
+  "owner": {
+    "name": "sofumel",
+    "url": "https://github.com/sofumel"
+  },
+  "description": "Marketplace hosting the handoff-revive plugin for cheap session resumption.",
+  "plugins": [
+    {
+      "name": "handoff-revive",
+      "source": ".",
+      "description": "Cross-session handoff checkpoint — resume after rate / usage / context limits at ~50–100x cheaper than `claude --resume`. Auto-saves at 90%/95% usage (synced with UI notification, per-session toggleable).",
+      "version": "1.0.0",
+      "category": "productivity",
+      "tags": [
+        "handoff",
+        "resume",
+        "rate-limit",
+        "tokens",
+        "multi-language"
+      ]
+    }
+  ]
+}

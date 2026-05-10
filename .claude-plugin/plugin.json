@@ -1,0 +1,22 @@
+{
+  "name": "handoff-revive",
+  "version": "1.0.0",
+  "description": "Save a compact handoff checkpoint and resume in a fresh session without replaying the entire transcript via --resume. Multi-language (en/ja/zh/zh-TW/ko/es/pt/de/fr/tr — 10 total), zero-token deterministic schema validation, turn-count nudge hook, and AUTO-SAVE at 90%/95% usage (synced with Claude Code's UI notification, per-session toggleable via /handoff-auto).",
+  "author": {
+    "name": "sofumel",
+    "url": "https://github.com/sofumel"
+  },
+  "homepage": "https://github.com/sofumel/claude-handoff-revive",
+  "repository": "https://github.com/sofumel/claude-handoff-revive",
+  "license": "MIT",
+  "keywords": [
+    "handoff",
+    "resume",
+    "rate-limit",
+    "checkpoint",
+    "context",
+    "tokens",
+    "session",
+    "multi-language"
+  ]
+}

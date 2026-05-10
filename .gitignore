@@ -1,0 +1,14 @@
+# Runtime state — never commit
+# All files inside .claude/handoff/ are session-local state, never source.
+.claude/handoff/
+
+# Local-only settings overrides
+.claude/settings.local.json
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.vscode/
+.idea/

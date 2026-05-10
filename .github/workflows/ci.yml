@@ -1,0 +1,573 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  bash-scripts:
+    name: bash scripts (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install.sh end-to-end
+        run: |
+          mkdir -p /tmp/r
+          ./install.sh /tmp/r
+          test -f /tmp/r/.claude/skills/handoff-revive/SKILL.md
+          test -f /tmp/r/.claude/skills/handoff-revive/scripts/finalize-handoff.sh
+          test -f /tmp/r/.claude/hooks/checkpoint-counter.sh
+
+      - name: install.sh source-missing guard
+        run: |
+          mkdir -p /tmp/empty
+          cp install.sh /tmp/empty/
+          ! bash /tmp/empty/install.sh /tmp/g 2>/dev/null
+
+      - name: validate-handoff (valid file)
+        run: |
+          mkdir -p /tmp/r/.claude/handoff
+          cp /tmp/r/.claude/skills/handoff-revive/templates/example.md /tmp/test.md
+          bash /tmp/r/.claude/skills/handoff-revive/scripts/validate-handoff.sh /tmp/test.md
+
+      - name: validate-handoff (rejects 7 invalid cases)
+        run: |
+          set -e
+          for case in 1 2 3 4 5 6 7; do
+            cp /tmp/r/.claude/skills/handoff-revive/templates/example.md /tmp/c.md
+            case $case in
+              1) tail -n +5 /tmp/c.md > /tmp/cc.md && mv /tmp/cc.md /tmp/c.md ;;
+              2) grep -v '^## decisions' /tmp/c.md > /tmp/cc.md && mv /tmp/cc.md /tmp/c.md ;;
+              3) sed -i.bak 's|src/auth/login.ts:42|src/auth/login.ts|' /tmp/c.md && rm /tmp/c.md.bak 2>/dev/null || true ;;
+              4) sed -i.bak 's| -- | : |g' /tmp/c.md && rm /tmp/c.md.bak 2>/dev/null || true ;;
+              5) sed -i.bak 's|ユーザー認証|{PLACEHOLDER}|' /tmp/c.md && rm /tmp/c.md.bak 2>/dev/null || true ;;
+              6) awk 'BEGIN{s=0} /^## goal$/{print; print ""; s=1; next} /^## /{s=0} s{next} 1' /tmp/c.md > /tmp/cc.md && mv /tmp/cc.md /tmp/c.md ;;
+              7) head -1 /tmp/c.md > /tmp/h.md && tail -n +6 /tmp/c.md > /tmp/t.md && cat /tmp/h.md /tmp/t.md > /tmp/c.md ;;
+            esac
+            if bash /tmp/r/.claude/skills/handoff-revive/scripts/validate-handoff.sh /tmp/c.md >/dev/null 2>&1; then
+              echo "FAIL: case $case should have been rejected"
+              exit 1
+            fi
+            echo "case $case: rejected as expected"
+          done
+
+      - name: extract-recent-files (git mode)
+        run: |
+          mkdir -p /tmp/g
+          cd /tmp/g
+          git init -q
+          git config user.email ci@example.com
+          git config user.name CI
+          touch foo.ts bar.py
+          git add foo.ts
+          bash $GITHUB_WORKSPACE/skills/handoff-revive/scripts/extract-recent-files.sh | grep -E '^- foo.ts -- added$'
+
+      - name: extract-recent-files (non-git fallback)
+        run: |
+          mkdir -p /tmp/ng
+          cd /tmp/ng
+          touch foo.ts
+          bash $GITHUB_WORKSPACE/skills/handoff-revive/scripts/extract-recent-files.sh | grep -E '^- foo.ts'
+
+      - name: cleanup-handoff (prune dead + strip empty optional)
+        run: |
+          cp /tmp/r/.claude/skills/handoff-revive/templates/example.md /tmp/cl.md
+          bash /tmp/r/.claude/skills/handoff-revive/scripts/cleanup-handoff.sh /tmp/cl.md 2>&1 | grep -E 'pruned [0-9]+ dead entries'
+
+      - name: cleanup is idempotent
+        run: |
+          cp /tmp/r/.claude/skills/handoff-revive/templates/example.md /tmp/i.md
+          bash /tmp/r/.claude/skills/handoff-revive/scripts/cleanup-handoff.sh /tmp/i.md >/dev/null 2>&1
+          h1=$(md5sum /tmp/i.md | cut -d' ' -f1 || md5 -q /tmp/i.md)
+          bash /tmp/r/.claude/skills/handoff-revive/scripts/cleanup-handoff.sh /tmp/i.md >/dev/null 2>&1
+          h2=$(md5sum /tmp/i.md | cut -d' ' -f1 || md5 -q /tmp/i.md)
+          [ "$h1" = "$h2" ]
+
+      - name: cleanup blocks shell injection
+        run: |
+          cat > /tmp/evil.md <<'EOF'
+          ---
+          saved_at: 2026-01-01
+          lang: en
+          ---
+
+          ## goal
+          g
+
+          ## done
+          - d
+
+          ## wip
+          - w
+
+          ## todo
+          - t
+
+          ## next_action
+          src/x:1 do
+
+          ## touched_files
+          - a"; touch /tmp/CI_PWNED; echo "b -- attempt
+
+          ## decisions
+          - x: y
+          EOF
+          rm -f /tmp/CI_PWNED
+          bash /tmp/r/.claude/skills/handoff-revive/scripts/cleanup-handoff.sh /tmp/evil.md >/dev/null 2>&1
+          test ! -f /tmp/CI_PWNED && echo "injection blocked"
+
+      - name: finalize-handoff (combined call)
+        run: |
+          cp /tmp/r/.claude/skills/handoff-revive/templates/example.md /tmp/fz.md
+          bash /tmp/r/.claude/skills/handoff-revive/scripts/finalize-handoff.sh /tmp/fz.md 2>&1 | grep -E 'Estimated savings'
+
+      - name: finalize exits 1 on invalid
+        run: |
+          echo "garbage" > /tmp/bad.md
+          if bash /tmp/r/.claude/skills/handoff-revive/scripts/finalize-handoff.sh /tmp/bad.md >/dev/null 2>&1; then
+            echo "FAIL: finalize should have failed on invalid"
+            exit 1
+          fi
+
+      - name: validate accepts trailing whitespace on section headers
+        run: |
+          cat > /tmp/tws.md <<'EOF'
+          ---
+          saved_at: 2026-05-09
+          lang: en
+          ---
+
+          ## goal
+          g
+
+          ## done
+          - d
+
+          ## wip
+          - w
+
+          ## todo
+          - t
+
+          ## next_action
+          src/x:1 do
+
+          ## touched_files
+          - x.ts -- m
+
+          ## decisions
+          - d: r
+          EOF
+          bash /tmp/r/.claude/skills/handoff-revive/scripts/validate-handoff.sh /tmp/tws.md
+
+      - name: cleanup preserves fenced code blocks containing ## lines
+        run: |
+          cat > /tmp/tcf.md <<'EOF'
+          ---
+          saved_at: 2026-05-09
+          lang: en
+          ---
+
+          ## goal
+          Refactor markdown handler. Avoid false matches:
+          ```
+          ## not-a-real-section
+          ```
+
+          ## done
+          - d
+
+          ## wip
+          - w
+
+          ## todo
+          - t
+
+          ## next_action
+          src/x:1 do
+
+          ## touched_files
+          - x.ts -- m
+
+          ## decisions
+          - d: r
+          EOF
+          bash /tmp/r/.claude/skills/handoff-revive/scripts/cleanup-handoff.sh /tmp/tcf.md
+          # The fence and its contents must still be inside the goal section,
+          # not promoted to a top-level section. Check that "## not-a-real-section"
+          # appears AFTER "## goal" and BEFORE "## done" — i.e. nested.
+          goal_line=$(grep -n '^## goal$' /tmp/tcf.md | head -1 | cut -d: -f1)
+          fake_line=$(grep -n '^## not-a-real-section$' /tmp/tcf.md | head -1 | cut -d: -f1)
+          done_line=$(grep -n '^## done$' /tmp/tcf.md | head -1 | cut -d: -f1)
+          if [ "$goal_line" -lt "$fake_line" ] && [ "$fake_line" -lt "$done_line" ]; then
+            echo "OK: fence content stayed inside goal section"
+          else
+            echo "FAIL: fence content was promoted to a section"
+            cat /tmp/tcf.md
+            exit 1
+          fi
+          # And re-validation must still pass.
+          bash /tmp/r/.claude/skills/handoff-revive/scripts/validate-handoff.sh /tmp/tcf.md
+
+      - name: Stop hook turn counter
+        run: |
+          cd /tmp/r
+          rm -f .claude/handoff/.turn
+          for i in 1 2 3; do bash .claude/hooks/checkpoint-counter.sh; done
+          test "$(cat .claude/handoff/.turn)" = "3"
+
+      - name: SessionStart hook (file present)
+        run: |
+          cd /tmp/r
+          mkdir -p .claude/handoff
+          touch .claude/handoff/current.md
+          bash .claude/hooks/session-start.sh | grep -q '"hookEventName":"SessionStart"'
+
+      - name: SessionStart hook silent on missing file
+        run: |
+          cd /tmp/r
+          rm -f .claude/handoff/current.md
+          out=$(bash .claude/hooks/session-start.sh)
+          test -z "$out"
+
+      - name: SessionStart captures session_id
+        run: |
+          cd /tmp/r
+          rm -f .claude/handoff/.session-id .claude/handoff/current.md
+          echo '{"session_id":"ci-test-sid","cwd":"/tmp/r"}' | bash .claude/hooks/session-start.sh >/dev/null 2>&1 || true
+          test "$(cat .claude/handoff/.session-id)" = "ci-test-sid"
+
+      - name: usage-monitor at 50% writes no flag
+        run: |
+          cd /tmp/r
+          rm -f .claude/handoff/.usage-flag .claude/handoff/.last-warned
+          echo '{"session_id":"sid-1","rate_limits":{"five_hour":{"used_percentage":50}}}' \
+            | bash .claude/hooks/usage-monitor.sh
+          test ! -f .claude/handoff/.usage-flag
+
+      - name: usage-monitor at 92% writes AUTO_SAVE flag
+        run: |
+          cd /tmp/r
+          rm -f .claude/handoff/.usage-flag .claude/handoff/.last-warned
+          echo '{"session_id":"sid-1","rate_limits":{"five_hour":{"used_percentage":92}}}' \
+            | bash .claude/hooks/usage-monitor.sh
+          test "$(cat .claude/handoff/.usage-flag)" = "AUTO_SAVE:92"
+          test "$(cat .claude/handoff/.last-warned)" = "90"
+
+      - name: usage-monitor 93% does not re-fire (already at 90 band)
+        run: |
+          cd /tmp/r
+          rm -f .claude/handoff/.usage-flag
+          echo "90" > .claude/handoff/.last-warned
+          echo '{"session_id":"sid-1","rate_limits":{"five_hour":{"used_percentage":93}}}' \
+            | bash .claude/hooks/usage-monitor.sh
+          test ! -f .claude/handoff/.usage-flag
+
+      - name: usage-monitor at 96% upgrades to URGENT
+        run: |
+          cd /tmp/r
+          rm -f .claude/handoff/.usage-flag
+          echo "90" > .claude/handoff/.last-warned
+          echo '{"session_id":"sid-1","rate_limits":{"five_hour":{"used_percentage":96}}}' \
+            | bash .claude/hooks/usage-monitor.sh
+          test "$(cat .claude/handoff/.usage-flag)" = "URGENT:96"
+          test "$(cat .claude/handoff/.last-warned)" = "95"
+
+      - name: usage-monitor at 30% clears last-warned (window reset)
+        run: |
+          cd /tmp/r
+          rm -f .claude/handoff/.usage-flag
+          echo "95" > .claude/handoff/.last-warned
+          echo '{"session_id":"sid-1","rate_limits":{"five_hour":{"used_percentage":30}}}' \
+            | bash .claude/hooks/usage-monitor.sh
+          test ! -f .claude/handoff/.last-warned
+
+      - name: usage-monitor respects per-session disable
+        run: |
+          cd /tmp/r
+          mkdir -p .claude/handoff/sessions
+          touch .claude/handoff/sessions/sid-2.disabled
+          rm -f .claude/handoff/.usage-flag .claude/handoff/.last-warned
+          echo '{"session_id":"sid-2","rate_limits":{"five_hour":{"used_percentage":92}}}' \
+            | bash .claude/hooks/usage-monitor.sh
+          test ! -f .claude/handoff/.usage-flag
+
+      - name: usage-monitor respects HANDOFF_AUTO_SAVE_PERCENT=disabled
+        run: |
+          cd /tmp/r
+          rm -f .claude/handoff/.usage-flag .claude/handoff/.last-warned
+          HANDOFF_AUTO_SAVE_PERCENT=disabled HANDOFF_URGENT_PERCENT=disabled \
+            echo '{"session_id":"sid-3","rate_limits":{"five_hour":{"used_percentage":98}}}' \
+            | HANDOFF_AUTO_SAVE_PERCENT=disabled HANDOFF_URGENT_PERCENT=disabled \
+              bash .claude/hooks/usage-monitor.sh
+          test ! -f .claude/handoff/.usage-flag
+
+      - name: user-prompt-submit emits JSON when flag exists
+        run: |
+          cd /tmp/r
+          echo "AUTO_SAVE:92" > .claude/handoff/.usage-flag
+          out=$(echo "{}" | bash .claude/hooks/user-prompt-submit.sh)
+          echo "$out" | grep -q '"hookEventName":"UserPromptSubmit"'
+          echo "$out" | grep -q "92"
+          test ! -f .claude/handoff/.usage-flag
+
+      - name: user-prompt-submit silent without flag
+        run: |
+          cd /tmp/r
+          rm -f .claude/handoff/.usage-flag
+          out=$(echo "{}" | bash .claude/hooks/user-prompt-submit.sh)
+          test -z "$out"
+
+      - name: handoff-auto.md slash command file installed
+        run: |
+          test -f /tmp/r/.claude/commands/handoff-auto.md
+          grep -q "handoff-auto" /tmp/r/.claude/commands/handoff-auto.md
+
+      - name: JSON files valid
+        run: |
+          for f in .claude-plugin/plugin.json .claude-plugin/marketplace.json hooks/hooks.json; do
+            python3 -c "import json; json.load(open('$f'))" || python -c "import json; json.load(open('$f'))"
+            echo "$f: OK"
+          done
+
+      - name: Markdown frontmatter is valid YAML
+        run: |
+          # Self-contained check: no PyPI dependency (macOS runners are PEP 668-locked).
+          # Parses only the simple "key: value" frontmatter we use; an unquoted ': ' in
+          # a value triggers YAML's nested-mapping rule and would be caught here.
+          python3 - <<'PY'
+          import re, sys
+          files = [
+              'skills/handoff-revive/SKILL.md',
+              'commands/handoff.md',
+              'commands/handoff-auto.md',
+              'commands/resume-from-handoff.md',
+          ]
+          ok = True
+          for path in files:
+              with open(path, encoding='utf-8') as f:
+                  content = f.read()
+              m = re.match(r'^---\n(.*?)\n---\n', content, re.DOTALL)
+              if not m:
+                  print(f'FAIL: no frontmatter in {path}'); ok = False; continue
+              for lineno, line in enumerate(m.group(1).split('\n'), start=2):
+                  if not line.strip():
+                      continue
+                  # Each frontmatter line must match `key: value` (key = identifier).
+                  km = re.match(r'^([A-Za-z_][\w-]*):\s*(.*)$', line)
+                  if not km:
+                      print(f'FAIL: {path}:{lineno} not a key: value line: {line!r}'); ok = False; continue
+                  value = km.group(2)
+                  # An unquoted scalar value containing ": " (colon + space) makes
+                  # the YAML parser reinterpret the line as a nested mapping.
+                  if not (value.startswith('"') or value.startswith("'")):
+                      if re.search(r':\s', value):
+                          print(f'FAIL: {path}:{lineno} unquoted value contains \": \" (YAML mapping trap): {value!r}')
+                          ok = False
+              if ok:
+                  print(f'OK: {path}')
+          sys.exit(0 if ok else 1)
+          PY
+
+      - name: E2E lifecycle (10 stages)
+        run: |
+          set -e
+          cd /tmp/r
+          S=".claude/skills/handoff-revive/scripts"
+          H=".claude/hooks"
+
+          # Stage 1: SessionStart captures session_id
+          rm -f .claude/handoff/.session-id .claude/handoff/.turn .claude/handoff/.usage-flag .claude/handoff/.last-warned
+          echo '{"session_id":"e2e-001","cwd":"/tmp/r"}' | bash $H/session-start.sh > /dev/null 2>&1 || true
+          test "$(cat .claude/handoff/.session-id)" = "e2e-001"
+
+          # Stage 2: 5 tool calls under threshold, no flag
+          for i in 1 2 3 4 5; do
+            echo '{"session_id":"e2e-001","rate_limits":{"five_hour":{"used_percentage":50}}}' | bash $H/usage-monitor.sh
+            bash $H/checkpoint-counter.sh
+          done
+          test "$(cat .claude/handoff/.turn)" = "5"
+          test ! -f .claude/handoff/.usage-flag
+
+          # Stage 3: 91% writes AUTO_SAVE
+          echo '{"session_id":"e2e-001","rate_limits":{"five_hour":{"used_percentage":91}}}' | bash $H/usage-monitor.sh
+          test "$(cat .claude/handoff/.usage-flag)" = "AUTO_SAVE:91"
+
+          # Stage 4: UserPromptSubmit consumes flag atomically
+          out=$(echo '{}' | bash $H/user-prompt-submit.sh)
+          echo "$out" | grep -q '"hookEventName":"UserPromptSubmit"'
+          echo "$out" | grep -q "91"
+          test ! -f .claude/handoff/.usage-flag
+
+          # Stage 5: 92% does not re-fire (already warned at 90)
+          echo '{"session_id":"e2e-001","rate_limits":{"five_hour":{"used_percentage":92}}}' | bash $H/usage-monitor.sh
+          test ! -f .claude/handoff/.usage-flag
+
+          # Stage 6: /handoff-auto off (simulated)
+          mkdir -p .claude/handoff/sessions
+          touch .claude/handoff/sessions/e2e-001.disabled
+
+          # Stage 7: 96% with disabled session = no flag
+          rm -f .claude/handoff/.usage-flag
+          echo "90" > .claude/handoff/.last-warned
+          echo '{"session_id":"e2e-001","rate_limits":{"five_hour":{"used_percentage":96}}}' | bash $H/usage-monitor.sh
+          test ! -f .claude/handoff/.usage-flag
+
+          # Stage 8: New session — SessionStart resets .turn
+          echo '{"session_id":"e2e-002","cwd":"/tmp/r"}' | bash $H/session-start.sh > /dev/null 2>&1 || true
+          test "$(cat .claude/handoff/.session-id)" = "e2e-002"
+          test ! -f .claude/handoff/.turn  # cleared
+
+          # Stage 9: Old session's disable file does NOT affect new session
+          echo '{"session_id":"e2e-002","rate_limits":{"five_hour":{"used_percentage":91}}}' | bash $H/usage-monitor.sh
+          test "$(cat .claude/handoff/.usage-flag)" = "AUTO_SAVE:91"
+
+          # Stage 10: finalize-handoff produces savings output
+          cp .claude/skills/handoff-revive/templates/example.md .claude/handoff/current.md
+          err=$(bash $S/finalize-handoff.sh 2>&1 1>/dev/null)
+          echo "$err" | grep -qE 'Estimated savings on next resume'
+
+          echo "E2E lifecycle: 10/10 stages pass"
+
+  pwsh-scripts:
+    name: PowerShell scripts (windows-latest)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install.ps1 end-to-end
+        run: |
+          New-Item -ItemType Directory -Path C:\rtest -Force | Out-Null
+          .\install.ps1 -Target C:\rtest
+          if (-not (Test-Path C:\rtest\.claude\skills\handoff-revive\SKILL.md)) { exit 1 }
+          if (-not (Test-Path C:\rtest\.claude\skills\handoff-revive\scripts\finalize-handoff.ps1)) { exit 1 }
+        shell: pwsh
+
+      - name: validate-handoff (valid)
+        run: |
+          New-Item -ItemType Directory -Path C:\rtest\.claude\handoff -Force | Out-Null
+          Copy-Item C:\rtest\.claude\skills\handoff-revive\templates\example.md C:\rtest\test.md
+          $exit = & powershell -ExecutionPolicy Bypass -File C:\rtest\.claude\skills\handoff-revive\scripts\validate-handoff.ps1 -File C:\rtest\test.md
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+        shell: pwsh
+
+      - name: validate-handoff (invalid → exit 1)
+        run: |
+          $ErrorActionPreference = "Continue"
+          "garbage" | Set-Content C:\rtest\bad.md
+          & powershell -ExecutionPolicy Bypass -File C:\rtest\.claude\skills\handoff-revive\scripts\validate-handoff.ps1 -File C:\rtest\bad.md *> $null
+          $childExit = $LASTEXITCODE
+          if ($childExit -eq 0) { Write-Output "FAIL: should have exited 1"; exit 1 }
+          Write-Output "OK: child exited $childExit as expected"
+          exit 0
+        shell: pwsh
+
+      - name: cleanup-handoff
+        run: |
+          Copy-Item C:\rtest\.claude\skills\handoff-revive\templates\example.md C:\rtest\cl.md
+          & powershell -ExecutionPolicy Bypass -File C:\rtest\.claude\skills\handoff-revive\scripts\cleanup-handoff.ps1 -File C:\rtest\cl.md
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+        shell: pwsh
+
+      - name: finalize-handoff
+        run: |
+          Copy-Item C:\rtest\.claude\skills\handoff-revive\templates\example.md C:\rtest\fz.md
+          & powershell -ExecutionPolicy Bypass -File C:\rtest\.claude\skills\handoff-revive\scripts\finalize-handoff.ps1 -File C:\rtest\fz.md
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+        shell: pwsh
+
+      - name: finalize-handoff PS exits 1 on invalid
+        run: |
+          $ErrorActionPreference = "Continue"
+          "garbage" | Set-Content C:\rtest\bad.md
+          & powershell -ExecutionPolicy Bypass -File C:\rtest\.claude\skills\handoff-revive\scripts\finalize-handoff.ps1 -File C:\rtest\bad.md *> $null
+          if ($LASTEXITCODE -eq 0) { Write-Output "FAIL: finalize PS should exit 1 on invalid"; exit 1 }
+          Write-Output "OK: finalize PS exited $LASTEXITCODE on invalid"
+          exit 0
+        shell: pwsh
+
+      - name: finalize-handoff PS works under pwsh (no powershell.exe assumption)
+        run: |
+          # Direct pwsh invocation — does NOT spawn Windows PowerShell. This catches
+          # regressions where finalize.ps1 spawns powershell.exe (would fail on PS7-only).
+          Copy-Item C:\rtest\.claude\skills\handoff-revive\templates\example.md C:\rtest\fz2.md
+          & C:\rtest\.claude\skills\handoff-revive\scripts\finalize-handoff.ps1 -File C:\rtest\fz2.md
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+        shell: pwsh
+
+      - name: Stop hook PS
+        run: |
+          $env:Path = "C:\rtest\.claude;$env:Path"
+          Set-Location C:\rtest
+          New-Item -ItemType Directory -Path .claude\handoff -Force | Out-Null
+          if (Test-Path .claude\handoff\.turn) { Remove-Item .claude\handoff\.turn }
+          1..3 | ForEach-Object { & powershell -ExecutionPolicy Bypass -File .claude\hooks\checkpoint-counter.ps1 }
+          $count = (Get-Content .claude\handoff\.turn -Raw).Trim()
+          if ($count -ne "3") { Write-Output "got $count, want 3"; exit 1 }
+        shell: pwsh
+
+      - name: usage-monitor PS at 92% writes AUTO_SAVE
+        run: |
+          Set-Location C:\rtest
+          Remove-Item .claude\handoff\.usage-flag, .claude\handoff\.last-warned -ErrorAction SilentlyContinue
+          $json = '{"session_id":"sid-1","rate_limits":{"five_hour":{"used_percentage":92}}}'
+          $json | & powershell -ExecutionPolicy Bypass -File .claude\hooks\usage-monitor.ps1
+          $flag = (Get-Content .claude\handoff\.usage-flag -Raw -ErrorAction SilentlyContinue).Trim()
+          if ($flag -ne "AUTO_SAVE:92") { Write-Output "got '$flag', want 'AUTO_SAVE:92'"; exit 1 }
+        shell: pwsh
+
+      - name: usage-monitor PS at 50% writes no flag
+        run: |
+          Set-Location C:\rtest
+          Remove-Item .claude\handoff\.usage-flag, .claude\handoff\.last-warned -ErrorAction SilentlyContinue
+          $json = '{"session_id":"sid-1","rate_limits":{"five_hour":{"used_percentage":50}}}'
+          $json | & powershell -ExecutionPolicy Bypass -File .claude\hooks\usage-monitor.ps1
+          if (Test-Path .claude\handoff\.usage-flag) {
+            Write-Output "FAIL: flag should not exist at 50%"
+            exit 1
+          }
+        shell: pwsh
+
+      - name: user-prompt-submit PS emits JSON when flag exists
+        run: |
+          Set-Location C:\rtest
+          "AUTO_SAVE:92" | Set-Content .claude\handoff\.usage-flag
+          $out = "{}" | & powershell -ExecutionPolicy Bypass -File .claude\hooks\user-prompt-submit.ps1
+          if (-not ($out -match '"hookEventName":"UserPromptSubmit"')) {
+            Write-Output "FAIL: missing hookEventName in: $out"
+            exit 1
+          }
+          if (-not ($out -match "92")) {
+            Write-Output "FAIL: missing 92 in: $out"
+            exit 1
+          }
+          if (Test-Path .claude\handoff\.usage-flag) {
+            Write-Output "FAIL: flag not cleared (one-shot)"
+            exit 1
+          }
+        shell: pwsh
+
+      - name: SessionStart PS captures session_id
+        run: |
+          Set-Location C:\rtest
+          Remove-Item .claude\handoff\.session-id -ErrorAction SilentlyContinue
+          $json = '{"session_id":"ci-ps-test","cwd":"C:\\rtest"}'
+          $json | & powershell -ExecutionPolicy Bypass -File .claude\hooks\session-start.ps1 | Out-Null
+          $sid = (Get-Content .claude\handoff\.session-id -Raw -ErrorAction SilentlyContinue).Trim()
+          if ($sid -ne "ci-ps-test") { Write-Output "got '$sid', want 'ci-ps-test'"; exit 1 }
+        shell: pwsh
+
+      - name: handoff-auto.md installed (PS)
+        run: |
+          if (-not (Test-Path C:\rtest\.claude\commands\handoff-auto.md)) {
+            Write-Output "FAIL: handoff-auto.md not installed"
+            exit 1
+          }
+        shell: pwsh
