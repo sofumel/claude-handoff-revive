@@ -26,10 +26,11 @@ else
 fi
 
 SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
+PLUGIN_DIR="$SRC_DIR/plugins/handoff-revive"
 
 # Verify source exists.
-if [ ! -d "$SRC_DIR/skills/handoff-revive" ]; then
-  echo "Error: source skill not found at $SRC_DIR/skills/handoff-revive" >&2
+if [ ! -d "$PLUGIN_DIR/skills/handoff-revive" ]; then
+  echo "Error: source skill not found at $PLUGIN_DIR/skills/handoff-revive" >&2
   echo "Are you running install.sh from inside the cloned repo root?" >&2
   exit 1
 fi
@@ -45,10 +46,21 @@ if [ -d "$TARGET/skills/handoff-revive" ]; then
   rm -rf "$TARGET/skills/handoff-revive"
 fi
 
-cp -R "$SRC_DIR/skills/handoff-revive" "$TARGET/skills/"
-cp "$SRC_DIR/commands/handoff.md"             "$TARGET/commands/"
-cp "$SRC_DIR/commands/resume-from-handoff.md" "$TARGET/commands/"
-cp "$SRC_DIR/commands/handoff-auto.md"        "$TARGET/commands/"
+cp -R "$PLUGIN_DIR/skills/handoff-revive" "$TARGET/skills/"
+
+# Dev-only test harness — not needed at runtime.
+rm -rf "$TARGET/skills/handoff-revive/scripts/tests"
+cp "$PLUGIN_DIR/commands/save.md"        "$TARGET/commands/"
+cp "$PLUGIN_DIR/commands/resume.md"      "$TARGET/commands/"
+cp "$PLUGIN_DIR/commands/auto.md"        "$TARGET/commands/"
+cp "$PLUGIN_DIR/commands/preview.md"     "$TARGET/commands/"
+cp "$PLUGIN_DIR/commands/list.md"        "$TARGET/commands/"
+cp "$PLUGIN_DIR/commands/restore.md"     "$TARGET/commands/"
+cp "$PLUGIN_DIR/commands/diff.md"        "$TARGET/commands/"
+cp "$PLUGIN_DIR/commands/share-to-pr.md" "$TARGET/commands/"
+cp "$PLUGIN_DIR/commands/stats.md"       "$TARGET/commands/"
+cp "$PLUGIN_DIR/commands/doctor.md"      "$TARGET/commands/"
+cp "$PLUGIN_DIR/commands/switch.md"      "$TARGET/commands/"
 
 # Copy hook setup doc so standalone users have it locally.
 [ -f "$SRC_DIR/HOOK_SETUP.md" ] && cp "$SRC_DIR/HOOK_SETUP.md" "$TARGET/skills/handoff-revive/"
@@ -58,8 +70,9 @@ for f in \
   checkpoint-counter.sh checkpoint-counter.ps1 \
   session-start.sh session-start.ps1 \
   usage-monitor.sh usage-monitor.ps1 \
-  user-prompt-submit.sh user-prompt-submit.ps1; do
-  cp "$SRC_DIR/hooks/$f" "$TARGET/hooks/"
+  user-prompt-submit.sh user-prompt-submit.ps1 \
+  pre-compact.sh pre-compact.ps1; do
+  cp "$PLUGIN_DIR/hooks/$f" "$TARGET/hooks/"
 done
 
 # Make shell hooks and scripts executable (no-op on Windows).
@@ -75,7 +88,7 @@ fi
 echo ""
 echo "[OK] Installed."
 echo "  Skill:           $TARGET/skills/handoff-revive"
-echo "  Slash commands:  /handoff  /resume-from-handoff"
+echo "  Slash commands:  /handoff-revive:save  /handoff-revive:resume"
 echo "  Hook scripts:    $TARGET/hooks/  (not yet activated)"
 echo ""
 echo "Next steps (optional):"

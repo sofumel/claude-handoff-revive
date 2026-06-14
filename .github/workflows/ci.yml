@@ -17,6 +17,63 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: shellcheck (warning+; ubuntu only)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          shellcheck --version | head -2
+          # -S warning: real bugs only (style/info excluded).
+          # SC1090/SC1091: we never source dynamic files.
+          shellcheck -S warning -e SC1090,SC1091 $(git ls-files '*.sh')
+          echo "shellcheck: clean"
+
+      - name: installer coverage (every command + hook shipped by BOTH installers)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          fail=0
+          for f in plugins/handoff-revive/commands/*.md; do
+            b=$(basename "$f")
+            grep -qF "$b" install.sh  || { echo "install.sh missing command: $b"; fail=1; }
+            grep -qF "$b" install.ps1 || { echo "install.ps1 missing command: $b"; fail=1; }
+          done
+          for f in plugins/handoff-revive/hooks/*.sh plugins/handoff-revive/hooks/*.ps1; do
+            b=$(basename "$f")
+            grep -qF "$b" install.sh  || { echo "install.sh missing hook: $b"; fail=1; }
+            grep -qF "$b" install.ps1 || { echo "install.ps1 missing hook: $b"; fail=1; }
+          done
+          [ "$fail" = "0" ] && echo "installer coverage: complete"
+          exit $fail
+
+      - name: local test harness (run-tests.sh)
+        run: bash plugins/handoff-revive/skills/handoff-revive/scripts/tests/run-tests.sh
+
+      - name: README i18n parity (every command row in all 10 languages)
+        run: |
+          set -e
+          fail=0
+          # Each pattern matches exactly one quick-reference table row per language:
+          # the command must be the whole second cell ("| `cmd` |"), so prose
+          # mentions of the same command don't count.
+          for pat in \
+            ':save` |' \
+            ':resume` |' \
+            ':preview` |' \
+            ':list` |' \
+            ':restore <timestamp>` |' \
+            ':diff \[timestamp\]` |' \
+            ':share-to-pr \[PR\]`' \
+            ':stats` |' \
+            ':doctor` |' \
+            ':switch` |' \
+            ':auto on` / `off`'; do
+            n=$(grep -c -- "| \`/handoff-revive${pat}" README.md || true)
+            if [ "$n" -ne 10 ]; then
+              echo "FAIL: command row '/handoff-revive${pat}' appears $n times (expected 10 — one per language table)"
+              fail=1
+            fi
+          done
+          [ "$fail" = "0" ] && echo "i18n parity: all 14 command rows present in all 10 languages"
+          exit $fail
+
       - name: install.sh end-to-end
         run: |
           mkdir -p /tmp/r
@@ -24,6 +81,8 @@ jobs:
           test -f /tmp/r/.claude/skills/handoff-revive/SKILL.md
           test -f /tmp/r/.claude/skills/handoff-revive/scripts/finalize-handoff.sh
           test -f /tmp/r/.claude/hooks/checkpoint-counter.sh
+          # dev-only test harness must NOT be installed
+          test ! -d /tmp/r/.claude/skills/handoff-revive/scripts/tests
 
       - name: install.sh source-missing guard
         run: |
@@ -67,14 +126,14 @@ jobs:
           git config user.name CI
           touch foo.ts bar.py
           git add foo.ts
-          bash $GITHUB_WORKSPACE/skills/handoff-revive/scripts/extract-recent-files.sh | grep -E '^- foo.ts -- added$'
+          bash $GITHUB_WORKSPACE/plugins/handoff-revive/skills/handoff-revive/scripts/extract-recent-files.sh | grep -E '^- foo.ts -- added$'
 
       - name: extract-recent-files (non-git fallback)
         run: |
           mkdir -p /tmp/ng
           cd /tmp/ng
           touch foo.ts
-          bash $GITHUB_WORKSPACE/skills/handoff-revive/scripts/extract-recent-files.sh | grep -E '^- foo.ts'
+          bash $GITHUB_WORKSPACE/plugins/handoff-revive/skills/handoff-revive/scripts/extract-recent-files.sh | grep -E '^- foo.ts'
 
       - name: cleanup-handoff (prune dead + strip empty optional)
         run: |
@@ -325,14 +384,14 @@ jobs:
           out=$(echo "{}" | bash .claude/hooks/user-prompt-submit.sh)
           test -z "$out"
 
-      - name: handoff-auto.md slash command file installed
+      - name: auto.md slash command file installed
         run: |
-          test -f /tmp/r/.claude/commands/handoff-auto.md
-          grep -q "handoff-auto" /tmp/r/.claude/commands/handoff-auto.md
+          test -f /tmp/r/.claude/commands/auto.md
+          grep -q "handoff-revive:auto" /tmp/r/.claude/commands/auto.md
 
       - name: JSON files valid
         run: |
-          for f in .claude-plugin/plugin.json .claude-plugin/marketplace.json hooks/hooks.json; do
+          for f in .claude-plugin/marketplace.json plugins/handoff-revive/.claude-plugin/plugin.json plugins/handoff-revive/hooks/hooks.json; do
             python3 -c "import json; json.load(open('$f'))" || python -c "import json; json.load(open('$f'))"
             echo "$f: OK"
           done
@@ -343,13 +402,10 @@ jobs:
           # Parses only the simple "key: value" frontmatter we use; an unquoted ': ' in
           # a value triggers YAML's nested-mapping rule and would be caught here.
           python3 - <<'PY'
-          import re, sys
-          files = [
-              'skills/handoff-revive/SKILL.md',
-              'commands/handoff.md',
-              'commands/handoff-auto.md',
-              'commands/resume-from-handoff.md',
-          ]
+          import re, sys, glob
+          # SKILL.md + every command file (new commands are picked up automatically).
+          files = ['plugins/handoff-revive/skills/handoff-revive/SKILL.md'] \
+              + sorted(glob.glob('plugins/handoff-revive/commands/*.md'))
           ok = True
           for path in files:
               with open(path, encoding='utf-8') as f:
@@ -442,12 +498,43 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: PSScriptAnalyzer (Error+Warning)
+        run: |
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+          # Excluded rules (with reasons):
+          #   PSUseShouldProcessForStateChangingFunctions — internal script
+          #     helpers, not exported cmdlets; -WhatIf plumbing adds nothing
+          #   PSAvoidUsingPositionalParameters — single-arg helper calls
+          #   PSAvoidUsingEmptyCatchBlock — best-effort phases deliberately
+          #     swallow failures (each site carries a comment); surfacing
+          #     them would break the "never block the save/resume" contract
+          $targets = @(Get-ChildItem -Recurse -Filter *.ps1 -Path plugins) + (Get-Item install.ps1)
+          $findings = @()
+          foreach ($t in $targets) {
+            $findings += Invoke-ScriptAnalyzer -Path $t.FullName -Severity Error, Warning `
+              -ExcludeRule PSUseShouldProcessForStateChangingFunctions, PSAvoidUsingPositionalParameters, PSAvoidUsingEmptyCatchBlock
+          }
+          if ($findings.Count -gt 0) {
+            $findings | Format-Table RuleName, Severity, ScriptName, Line, Message -AutoSize | Out-String -Width 200 | Write-Output
+            exit 1
+          }
+          Write-Output "PSScriptAnalyzer: clean ($($targets.Count) files)"
+        shell: pwsh
+
+      - name: local test harness (run-tests.ps1)
+        run: |
+          & .\plugins\handoff-revive\skills\handoff-revive\scripts\tests\run-tests.ps1
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+        shell: pwsh
+
       - name: install.ps1 end-to-end
         run: |
           New-Item -ItemType Directory -Path C:\rtest -Force | Out-Null
           .\install.ps1 -Target C:\rtest
           if (-not (Test-Path C:\rtest\.claude\skills\handoff-revive\SKILL.md)) { exit 1 }
           if (-not (Test-Path C:\rtest\.claude\skills\handoff-revive\scripts\finalize-handoff.ps1)) { exit 1 }
+          # dev-only test harness must NOT be installed
+          if (Test-Path C:\rtest\.claude\skills\handoff-revive\scripts\tests) { exit 1 }
         shell: pwsh
 
       - name: validate-handoff (valid)
@@ -564,10 +651,10 @@ jobs:
           if ($sid -ne "ci-ps-test") { Write-Output "got '$sid', want 'ci-ps-test'"; exit 1 }
         shell: pwsh
 
-      - name: handoff-auto.md installed (PS)
+      - name: auto.md installed (PS)
         run: |
-          if (-not (Test-Path C:\rtest\.claude\commands\handoff-auto.md)) {
-            Write-Output "FAIL: handoff-auto.md not installed"
+          if (-not (Test-Path C:\rtest\.claude\commands\auto.md)) {
+            Write-Output "FAIL: auto.md not installed"
             exit 1
           }
         shell: pwsh

@@ -8,9 +8,9 @@
   "plugins": [
     {
       "name": "handoff-revive",
-      "source": ".",
-      "description": "Cross-session handoff checkpoint — resume after rate / usage / context limits at ~50–100x cheaper than `claude --resume`. Auto-saves at 90%/95% usage (synced with UI notification, per-session toggleable).",
-      "version": "1.0.0",
+      "source": "./plugins/handoff-revive",
+      "description": "Cross-session handoff checkpoint — saves a compact handoff file (~1–3k tokens) instead of replaying your entire prior session via `claude --resume`. Auto-saves at 90%/95% usage (synced with UI notification, per-session toggleable).",
+      "version": "2.0.0",
       "category": "productivity",
       "tags": [
         "handoff",
