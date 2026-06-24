@@ -137,7 +137,13 @@ Steps:
 
 1. Read `.claude/handoff/current.md`. **Do not read prior session transcripts.**
 2. Read `.claude/handoff/lang` and respond in that language.
-3. **Freshness check** (zero tokens) — compares the handoff's `base_commit` / `branch` metadata to the current git state:
+3. **Resume receipt** (zero tokens) — before editing, print a tiny receipt that proves the load boundary without echoing the handoff body or prior transcript:
+   - Linux/macOS/WSL/Git-Bash: `bash "${CLAUDE_PLUGIN_ROOT:-.claude}/skills/handoff-revive/scripts/resume-receipt.sh"`
+   - Windows PowerShell: `$r = if ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { ".claude" }; powershell -ExecutionPolicy Bypass -File "$r/skills/handoff-revive/scripts/resume-receipt.ps1"`
+
+   Show this receipt before any edits. It should say the session loaded `current.md` only, did **not** load prior transcript/history snapshots, list section names/counts, report `next_action_present`, summarize freshness as `ok` or warning count, and include privacy flags such as `handoff_body_echoed=false`.
+
+4. **Freshness check** (zero tokens) — compares the handoff's `base_commit` / `branch` metadata to the current git state:
    - Linux/macOS/WSL/Git-Bash: `bash "${CLAUDE_PLUGIN_ROOT:-.claude}/skills/handoff-revive/scripts/check-freshness.sh"`
    - Windows PowerShell: `$r = if ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { ".claude" }; powershell -ExecutionPolicy Bypass -File "$r/skills/handoff-revive/scripts/check-freshness.ps1"`
 
@@ -146,9 +152,9 @@ Steps:
    In the same step, count the resume for `/handoff-revive:stats` (zero tokens, best-effort):
    - Linux/macOS/WSL/Git-Bash: `bash "${CLAUDE_PLUGIN_ROOT:-.claude}/skills/handoff-revive/scripts/stats-handoff.sh" record resume`
    - Windows PowerShell: `$r = if ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } else { ".claude" }; powershell -ExecutionPolicy Bypass -File "$r/skills/handoff-revive/scripts/stats-handoff.ps1" -Cmd record -Kind resume`
-4. Read each file listed in `touched_files` only if needed for the immediate `next_action`. Do not preemptively read all of them.
-5. State the goal and `next_action` back to the user in 1–2 sentences and ask "Proceed?" before editing.
-6. After the user confirms or redirects, execute `next_action`.
+5. Read each file listed in `touched_files` only if needed for the immediate `next_action`. Do not preemptively read all of them.
+6. State the goal and `next_action` back to the user in 1–2 sentences and ask "Proceed?" before editing.
+7. After the user confirms or redirects, execute `next_action`.
 
 ## Schema (template)
 
