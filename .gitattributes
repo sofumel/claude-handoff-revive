@@ -12,6 +12,11 @@
 *.yml       text eol=lf
 *.yaml      text eol=lf
 
+# Plain-text data files (e.g. lib/secret-patterns.txt) must stay LF: the bash
+# scripts read them line-by-line, and a stray CRLF would smuggle a trailing
+# \r into each value (silently breaking secret detection on Windows clones).
+*.txt       text eol=lf
+
 # Binary files (none currently, but future-proof).
 *.png       binary
 *.jpg       binary

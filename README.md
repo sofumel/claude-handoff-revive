@@ -28,6 +28,11 @@
   <a href="#-türkçe">🇹🇷 Türkçe</a>
 </p>
 
+<p align="center">
+  <a href="CONTRIBUTING.md">Contributing</a> ·
+  <a href="LICENSE">License (MIT)</a>
+</p>
+
 ---
 
 <a id="-english"></a>

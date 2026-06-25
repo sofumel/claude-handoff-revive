@@ -4,6 +4,17 @@ All notable changes to `claude-handoff-revive` are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] — 2026-06-25
+
+### Added
+
+- **Resume receipt** — `/handoff-revive:resume` now prints a tiny load-boundary receipt before any edits: handoff path, saved/current branch, base commit, the sections present, `next_action` presence, freshness summary, and privacy flags — without echoing the handoff body or the prior transcript. Thanks @caioribeiroclw-pixel ([#2](https://github.com/sofumel/claude-handoff-revive/pull/2)).
+- `CONTRIBUTING.md` — contributor guide (bash/PowerShell parity, lint gates, line-ending/BOM rules, how to run the test suites), linked from the README header.
+
+### Fixed
+
+- **Secret detection was silently disabled on CRLF checkouts.** `sanitize-handoff.sh` read `lib/secret-patterns.txt` line-by-line without stripping a trailing `\r`, so a Windows clone with `autocrlf=true` checked the file out as CRLF and every known-prefix pattern gained a trailing carriage return — the alternation stopped matching and `share-to-pr` would **not** abort on a real API key. Now strips the CR per pattern, and `.gitattributes` pins `*.txt` to LF. The PowerShell twin was unaffected (`Get-Content` + `.Trim()` already drop the CR). Added `test-sanitize-crlf.{sh,ps1}` regression tests.
+
 ## [2.0.0] — 2026-06-14
 
 Initial public release of the rebuilt plugin. Everything below runs as pure

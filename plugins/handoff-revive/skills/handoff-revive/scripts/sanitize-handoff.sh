@@ -88,6 +88,7 @@ if [ ! -f "$PATTERNS_FILE" ]; then
 fi
 SECRET_PATTERN=""
 while IFS= read -r line; do
+  line="${line%$'\r'}"   # tolerate CRLF patterns file (Windows checkout)
   case "$line" in ''|\#*) continue ;; esac
   if [ -z "$SECRET_PATTERN" ]; then
     SECRET_PATTERN="$line"
