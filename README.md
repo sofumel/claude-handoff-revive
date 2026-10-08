@@ -224,6 +224,8 @@ bash .claude/skills/handoff-revive/scripts/setup-claude-md.sh
 
 MIT — see [LICENSE](LICENSE).
 
+Privacy — see [PRIVACY.md](plugins/handoff-revive/PRIVACY.md): everything runs locally. No data leaves your machine unless you run `/handoff-revive:share-to-pr` yourself.
+
 </details>
 
 ---
@@ -416,6 +418,8 @@ bash .claude/skills/handoff-revive/scripts/setup-claude-md.sh
 ### ライセンス
 
 MIT — [LICENSE](LICENSE) 参照。
+
+プライバシー — [PRIVACY.md](plugins/handoff-revive/PRIVACY.md) 参照。ローカルで完結します。`/handoff-revive:share-to-pr` を自分で実行しない限り、データが外部に出ることはありません。
 
 </details>
 
@@ -610,6 +614,8 @@ bash .claude/skills/handoff-revive/scripts/setup-claude-md.sh
 
 MIT — see [LICENSE](LICENSE).
 
+Privacy — see [PRIVACY.md](plugins/handoff-revive/PRIVACY.md): everything runs locally. No data leaves your machine unless you run `/handoff-revive:share-to-pr` yourself.
+
 </details>
 
 ---
@@ -802,6 +808,8 @@ bash .claude/skills/handoff-revive/scripts/setup-claude-md.sh
 ### License
 
 MIT — see [LICENSE](LICENSE).
+
+Privacy — see [PRIVACY.md](plugins/handoff-revive/PRIVACY.md): everything runs locally. No data leaves your machine unless you run `/handoff-revive:share-to-pr` yourself.
 
 </details>
 
@@ -996,6 +1004,8 @@ bash .claude/skills/handoff-revive/scripts/setup-claude-md.sh
 
 MIT — see [LICENSE](LICENSE).
 
+Privacy — see [PRIVACY.md](plugins/handoff-revive/PRIVACY.md): everything runs locally. No data leaves your machine unless you run `/handoff-revive:share-to-pr` yourself.
+
 </details>
 
 ---
@@ -1188,6 +1198,8 @@ bash .claude/skills/handoff-revive/scripts/setup-claude-md.sh
 ### License
 
 MIT — see [LICENSE](LICENSE).
+
+Privacy — see [PRIVACY.md](plugins/handoff-revive/PRIVACY.md): everything runs locally. No data leaves your machine unless you run `/handoff-revive:share-to-pr` yourself.
 
 </details>
 
@@ -1382,6 +1394,8 @@ bash .claude/skills/handoff-revive/scripts/setup-claude-md.sh
 
 MIT — see [LICENSE](LICENSE).
 
+Privacy — see [PRIVACY.md](plugins/handoff-revive/PRIVACY.md): everything runs locally. No data leaves your machine unless you run `/handoff-revive:share-to-pr` yourself.
+
 </details>
 
 ---
@@ -1574,6 +1588,8 @@ bash .claude/skills/handoff-revive/scripts/setup-claude-md.sh
 ### License
 
 MIT — see [LICENSE](LICENSE).
+
+Privacy — see [PRIVACY.md](plugins/handoff-revive/PRIVACY.md): everything runs locally. No data leaves your machine unless you run `/handoff-revive:share-to-pr` yourself.
 
 </details>
 
@@ -1768,6 +1784,8 @@ bash .claude/skills/handoff-revive/scripts/setup-claude-md.sh
 
 MIT — see [LICENSE](LICENSE).
 
+Privacy — see [PRIVACY.md](plugins/handoff-revive/PRIVACY.md): everything runs locally. No data leaves your machine unless you run `/handoff-revive:share-to-pr` yourself.
+
 </details>
 
 ---
@@ -1960,6 +1978,8 @@ bash .claude/skills/handoff-revive/scripts/setup-claude-md.sh
 ### License
 
 MIT — see [LICENSE](LICENSE).
+
+Privacy — see [PRIVACY.md](plugins/handoff-revive/PRIVACY.md): everything runs locally. No data leaves your machine unless you run `/handoff-revive:share-to-pr` yourself.
 
 </details>
 
