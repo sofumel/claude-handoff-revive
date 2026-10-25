@@ -3,6 +3,12 @@
 </p>
 
 <p align="center">
+  <a href="https://trendshift.io/repositories/41675?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-41675" target="_blank" rel="noopener noreferrer">
+    <img src="https://trendshift.io/api/badge/trendshift/repositories/41675/daily?language=PowerShell" alt="sofumel/claude-handoff-revive | Trendshift" width="250" height="55">
+  </a>
+</p>
+
+<p align="center">
   <a href="https://github.com/sofumel/claude-handoff-revive/actions/workflows/ci.yml"><img src="https://github.com/sofumel/claude-handoff-revive/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/sofumel/claude-handoff-revive/releases"><img src="https://img.shields.io/github/v/release/sofumel/claude-handoff-revive" alt="Release"></a>
   <a href="https://github.com/sofumel/claude-handoff-revive/stargazers"><img src="https://img.shields.io/github/stars/sofumel/claude-handoff-revive?style=flat" alt="Stars"></a>
